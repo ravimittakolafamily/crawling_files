@@ -102,7 +102,7 @@ exports.searchBusiness = function (req, res) {
     } else if (siteName == "merchantCircle") {
         merchantCircle(businessName, city, state, zipcode, res);
     } else if (siteName == "kudzu") {
-        kudzu(businessName, city, state,zipcode, res);
+        kudzu(businessName, city, state, zipcode, res);
     } else if (siteName == "foursquare") {
         fetchfoursquare(businessName, city, state, zipcode, res);
     } else if (siteName == "yelp") {
@@ -141,48 +141,33 @@ exports.searchBusiness = function (req, res) {
 
 function bizwiki(businessName, city, state, zipcode, res) {
     try {
-        var _ph, _page, _outObj;
-        phantom
-            .create()
-            .then(ph => {
-                _ph = ph;
-                return _ph.createPage();
-            })
-            .then(page => {
-                _page = page;
-                return _page.open("https://www.bizwiki.com/search?what=" + businessName + "&where=" + city + "%2C" + state);
-            })
-            .then(status => {
-                var zip = zipcode;
-                _page.injectJs("./assets/jquery.min.js");
-                var title = _page.evaluate(function (zip, businessName, city, state) {
-                    var obj = {};
-                    // obj.siteName = "WTF";
-                    console.log(status);
-                    obj.siteName = "bizwiki";
-                    $(".bizbrief").each(function () {
-                        if ($(this).find(".titlethree>h3>a").text().toUpperCase() === businessName.toUpperCase()) {
-                            obj.name = $(this).find(".titlethree>h3>a").text();
-                            $(".bizdetails li").forEach((el, i) => {
-                                el
-                            })
-                            obj.address = ($(this).find(".bizdetails").text()).replace(/(\r\n|\n|\r)/gm, " ").replace(/\s+/g, " ");
-                            obj.phone = $(this).find(".firmPhone").text();
-                            obj.url = $(this).find(".titlethree>h3>a").attr("href");
-                            obj.match = true
-                        } else {
-                            obj.match = false
-                        }
-                    })
+        browser.requestSingle({ url: "https://www.bizwiki.com/search?what=" + businessName + "&where=" + state, renderType: "html" }, (err, userResponse) => {
+            if (err != null) {
+                throw err;
+            }
+            var aj = userResponse.content.data;
+            var doc = parser.parseFromString(aj, "text/html");
+            const dom = new JSDOM(`${doc.rawHTML}`);
+            var obj = {};
+            obj.siteName = "bizwiki";
+            //console.log(dom.window.document.querySelectorAll(".bizbrief")[0].querySelector('.titlethree').textContent.replace(/(\r\n|\n|\r)/gm, " ").replace(/\s+/g, " "))
+            for (let i = 0; i < dom.window.document.querySelectorAll(".bizbrief").length; i++) {
+                var address = dom.window.document.querySelectorAll(".bizbrief")[i].querySelector('.titlethree').textContent.replace(/(\r\n|\n|\r)/gm, " ").replace(/\s+/g, " ");
+                if (address.includes(businessName.split('+').join(' '))) {
+                    obj.name = address
+                    obj.address = dom.window.document.querySelectorAll(".bizbrief")[i].querySelector('.bizdetails').textContent.replace(/(\r\n|\n|\r)/gm, " ").replace(/\s+/g, " ")
+                    obj.url = "https://www.bizwiki.com/" + dom.window.document.querySelectorAll(".bizbrief")[i].querySelector('.titlethree').querySelector('a').href;
+                    //obj.phone = dom.window.document.querySelectorAll(".bizbrief")[i].querySelectorAll('.business-location')[1].textContent;
+                    obj.match = true;
+                    console.log(obj);
+                    res.send(obj);
                     return obj;
-                }, zip, businessName, city, state);
-                return title;
-            })
-            .then(content => {
-                res.send(content);
-                _page.close();
-                _ph.exit();
-            })
+                } else {
+                    obj.match = false;
+                }
+            }
+            return obj;
+        })
             .catch(e => {
                 console.log(e)
                 let bizwiki = {};
@@ -748,67 +733,66 @@ function brownbook(businessName, businessPhone, city, state, zipcode, res) {
 
 function localstack(businessName, city, state, zipcode, res) {
     browser.requestSingle({ url: "https://localstack.com/search?q=" + businessName + "&locationPath=" + city + "-" + state, renderType: "html" }, (err, userResponse) => {
-            if (err != null) {
-                throw err;
+        if (err != null) {
+            throw err;
+        }
+        var aj = userResponse.content.data;
+        var doc = parser.parseFromString(aj, "text/html");
+        const dom = new JSDOM(`${doc.rawHTML}`);
+        var obj = {};
+        obj.siteName = "Localstack";
+        for (let i = 0; i < dom.window.document.querySelectorAll(".search-result").length; i++) {
+            var address = dom.window.document.querySelectorAll(".search-result")[i].querySelector('.business-information a').textContent;
+            if (address.includes(businessName.split('+').join(' '))) {
+                obj.name = address
+                obj.address = dom.window.document.querySelectorAll(".search-result")[i].querySelector('.business-location span').getElementsByTagName('span')[0].textContent + " " + dom.window.document.querySelectorAll(".search-result")[i].querySelector('.business-location span').getElementsByTagName('span')[2].textContent + " " + dom.window.document.querySelectorAll(".search-result")[i].querySelector('.business-location span').getElementsByTagName('span')[4].textContent
+                obj.url = "https://localstack.com/" + dom.window.document.querySelectorAll(".search-result")[i].querySelector('.business-information a').href;
+                obj.phone = dom.window.document.querySelectorAll(".search-result")[i].querySelectorAll('.business-location')[1].textContent;
+                obj.match = true;
+                console.log(obj);
+                return obj;
+            } else {
+                obj.match = false;
             }
-            var aj = userResponse.content.data;
-            var doc = parser.parseFromString(aj, "text/html");
-            const dom = new JSDOM(`${doc.rawHTML}`);
-            var obj = {};
-            obj.siteName = "Localstack";
-            console.log(dom.window.document.querySelectorAll(".search-result")[0].querySelector("business-location").getElementsByTagName('span').getElementsByTagName('span')[0].textContent)
-             for (let i = 0; i < dom.window.document.querySelectorAll(".search-result").length; i++) {
-                  var address = dom.window.document.querySelectorAll(".search-result")[i].querySelector(".business-name").textContent
-                  if (address.includes(businessName.split('+').join(' '))) {
-                      obj.name = dom.window.document.querySelectorAll(".search-result")[i].querySelector(".business-name").textContent;
-                      obj.address = dom.window.document.querySelectorAll(".search-result")[i].querySelectorAll(".address span")[0].textContent;
-                      obj.url = "https://localstack.com/" + dom.window.document.querySelectorAll(".search-result")[i].querySelector("a.business-name").href;
-                      obj.phone = dom.window.document.querySelectorAll(".search-result")[i].querySelector(".business-location a").textContent;
-                      obj.match = true;
-                      console.log(obj);
-                      return obj;
-                  } else {
-                      obj.match = false;
-                  }
-            }
-            return obj;
-        })
+        }
+        return obj;
+    })
         .then(content => {
             res.send(content);
         })
         .catch(e => console.log(e));
 }
 
-function kudzu(businessName, city, state,zipcode, res) {
-    browser.requestSingle({ url: "https://www.kudzu.com/controller.jsp?N=0&searchVal="+businessName+"&"+"currentLocation="+city+"%2C%20"+state+"%2030308&searchType=keyword&Ns=P_PremiumPlacement", renderType: "html" }, (err, userResponse) => {
-            if (err != null) {
-                throw err;
+function kudzu(businessName, city, state, zipcode, res) {
+    browser.requestSingle({ url: "https://www.kudzu.com/controller.jsp?N=0&searchVal=" + businessName + "&" + "currentLocation=" + city + "%2C%20" + state + "%2030308&searchType=keyword&Ns=P_PremiumPlacement", renderType: "html" }, (err, userResponse) => {
+        if (err != null) {
+            throw err;
+        }
+        var aj = userResponse.content.data;
+        var doc = parser.parseFromString(aj, "text/html");
+        const dom = new JSDOM(`${doc.rawHTML}`);
+        var obj = {};
+        obj.siteName = "kudzu";
+        //console.log(dom.window.document.querySelector('#content-left-block').querySelectorAll(".navRecordDiv")[0].textContent)
+        for (let i = 0; i < dom.window.document.querySelector('#content-left-block').querySelectorAll(".navRecordDiv").length; i++) {
+            var address = dom.window.document.querySelector('#content-left-block').querySelectorAll(".navRecordDiv")[i].querySelector(".adr p").querySelectorAll(".hide-mb")[5].textContent;
+            if (address.includes(zipcode)) {
+                obj.businessName = dom.window.document.querySelector('#content-left-block').querySelectorAll(".navRecordDiv")[i].querySelector(".sresult-content-left h3 a").textContent.replace(/(\r\n|\n|\r)/gm, "").replace(/\s+/g, " ");
+                obj.address = dom.window.document.querySelector('#content-left-block').querySelectorAll(".navRecordDiv")[i].querySelector(".adr p").querySelectorAll(".hide-mb")[0].textContent;
+                obj.city = dom.window.document.querySelector('#content-left-block').querySelectorAll(".navRecordDiv")[i].querySelector(".adr p").querySelectorAll(".hide-mb")[2].textContent;
+                obj.state = dom.window.document.querySelector('#content-left-block').querySelectorAll(".navRecordDiv")[i].querySelector(".adr p").querySelectorAll(".hide-mb")[4].textContent;
+                obj.zip = dom.window.document.querySelector('#content-left-block').querySelectorAll(".navRecordDiv")[i].querySelector(".adr p").querySelectorAll(".hide-mb")[5].textContent;
+                obj.url = "https://www.kudzu.com/" + dom.window.document.querySelector('#content-left-block').querySelectorAll(".navRecordDiv")[i].querySelector(".sresult-content-left h3 a").href;
+                obj.phone = dom.window.document.querySelector('#content-left-block').querySelectorAll(".navRecordDiv")[i].querySelector(".sresult-content-left meta").content;
+                obj.match = true;
+                console.log(obj);
+                return obj;
+            } else {
+                obj.match = false;
             }
-            var aj = userResponse.content.data;
-            var doc = parser.parseFromString(aj, "text/html");
-            const dom = new JSDOM(`${doc.rawHTML}`);
-            var obj = {};
-            obj.siteName = "kudzu";
-            //console.log(dom.window.document.querySelector('#content-left-block').querySelectorAll(".navRecordDiv")[0].textContent)
-            for (let i = 0; i < dom.window.document.querySelector('#content-left-block').querySelectorAll(".navRecordDiv").length; i++) {
-                 var address =dom.window.document.querySelector('#content-left-block').querySelectorAll(".navRecordDiv")[i].querySelector(".adr p").querySelectorAll(".hide-mb")[5].textContent;
-                 if (address.includes(zipcode)) {
-                     obj.businessName = dom.window.document.querySelector('#content-left-block').querySelectorAll(".navRecordDiv")[i].querySelector(".sresult-content-left h3 a").textContent.replace(/(\r\n|\n|\r)/gm, "").replace(/\s+/g, " ");
-                     obj.address = dom.window.document.querySelector('#content-left-block').querySelectorAll(".navRecordDiv")[i].querySelector(".adr p").querySelectorAll(".hide-mb")[0].textContent;
-                     obj.city = dom.window.document.querySelector('#content-left-block').querySelectorAll(".navRecordDiv")[i].querySelector(".adr p").querySelectorAll(".hide-mb")[2].textContent;
-                     obj.state = dom.window.document.querySelector('#content-left-block').querySelectorAll(".navRecordDiv")[i].querySelector(".adr p").querySelectorAll(".hide-mb")[4].textContent;
-                     obj.zip = dom.window.document.querySelector('#content-left-block').querySelectorAll(".navRecordDiv")[i].querySelector(".adr p").querySelectorAll(".hide-mb")[5].textContent;
-                     obj.url = "https://www.kudzu.com/"+dom.window.document.querySelector('#content-left-block').querySelectorAll(".navRecordDiv")[i].querySelector(".sresult-content-left h3 a").href;
-                     obj.phone = dom.window.document.querySelector('#content-left-block').querySelectorAll(".navRecordDiv")[i].querySelector(".sresult-content-left meta").content;
-                     obj.match = true;
-                     console.log(obj);
-                     return obj;
-                 } else {
-                     obj.match = false;
-                 }
-            }
-            return obj;
-        })
+        }
+        return obj;
+    })
         .then(content => {
             res.send(content);
         })
@@ -1677,7 +1661,7 @@ function localdatabase(businessName, city, state, zipcode, res) {
             obj.siteName = "localdatabase";
             //console.log(dom.window.document.querySelector('ul.listings').querySelectorAll("[itemscope]")[0].textContent)
             for (let i = 0; i < dom.window.document.querySelector('ul.listings').querySelectorAll("[itemscope]").length; i++) {
-                var address =dom.window.document.querySelector('ul.listings').querySelectorAll("[itemscope]")[i].querySelector(".details").querySelector(".address").querySelector(".postalCode").textContent;
+                var address = dom.window.document.querySelector('ul.listings').querySelectorAll("[itemscope]")[i].querySelector(".details").querySelector(".address").querySelector(".postalCode").textContent;
                 if (address.includes(zipcode)) {
                     obj.businessName = dom.window.document.querySelector('ul.listings').querySelectorAll("[itemscope]")[i].querySelector("h4 a").textContent.replace(/(\r\n|\n|\r)/gm, "").replace(/\s+/g, " ");
                     obj.address = dom.window.document.querySelector('ul.listings').querySelectorAll("[itemscope]")[i].querySelector(".details").querySelector(".address").querySelector(".address").textContent;
